@@ -11,6 +11,7 @@ import heapq
 from .predictions import PredictionImpossible
 from .algo_base import AlgoBase
 
+from overlapping import mean_std_pearson
 
 # Important note: as soon as an algorithm uses a similarity measure, it should
 # also allow the bsl_options parameter because of the pearson_baseline
@@ -411,6 +412,133 @@ class KNNWithZScore(SymmetricAlgo):
             est += sum_ratings / sum_sim * self.sigmas[x]
         except ZeroDivisionError:
             pass  # return mean
+
+        details = {'actual_k': actual_k}
+        return est, details
+
+
+class KNNWithIntersectionZScoreS1(KNNWithZScore):
+    def estimate(self, u, i):
+
+        if not (self.trainset.knows_user(u) and self.trainset.knows_item(i)):
+            raise PredictionImpossible('User and/or item is unkown.')
+
+        x, y = self.switch(u, i)
+
+        x_r = np.full(self.n_y, np.nan, dtype=np.float64)
+        neighbor_r = x_r.copy()
+        x_y, r = zip(*self.xr[x])
+        x_r[list(x_y)] = r
+        x_nan_mask = np.isnan(x_r)
+
+        neighbors = [(x2, self.sim[x, x2], r) for (x2, r) in self.yr[y]]
+        k_neighbors = heapq.nlargest(self.k, neighbors, key=lambda t: t[1])
+
+
+        # compute weighted average
+        sum_sim = sum_ratings = actual_k = 0
+        for (nb, sim, r) in k_neighbors:
+            if sim > 0:
+                nb_y, nb_r = zip(*self.xr[nb])
+                neighbor_r[list(nb_y)] = nb_r
+                overlapping_ind = np.flatnonzero(~(x_nan_mask | np.isnan(neighbor_r)))
+                x_overlapping_r = x_r[overlapping_ind]
+                neighbor_overlapping_r = neighbor_r[overlapping_ind]
+                # reset
+                neighbor_r.fill(np.nan)
+
+                x_nb_mean = x_overlapping_r.mean()
+                x_nb_std = ((x_overlapping_r - x_nb_mean) ** 2).mean() ** 0.5
+                if x_nb_std == 0:
+                    x_nb_std = self.sigmas[x]
+
+                nb_x_mean = neighbor_overlapping_r.mean()
+                nb_x_std = ((neighbor_overlapping_r - nb_x_mean) ** 2).mean() ** 0.5
+                if nb_x_std == 0:
+                    nb_x_std = self.sigmas[nb]
+
+                sum_sim += sim
+                sum_ratings += sim * ((r - nb_x_mean) / nb_x_std * x_nb_std + x_nb_mean)
+
+                actual_k += 1
+
+        if actual_k < self.min_k:
+            sum_ratings = 0
+
+        try:
+            est = sum_ratings / sum_sim
+        except ZeroDivisionError:
+            est = self.means[x]
+            # return mean
+
+        details = {'actual_k': actual_k}
+        return est, details
+
+
+class KNNWithIntersectionZScoreS2(KNNWithZScore):
+    def fit(self, trainset):
+
+        SymmetricAlgo.fit(self, trainset)
+
+        self.means = np.zeros(self.n_x)
+        sigmas = np.zeros(self.n_x)
+        # when certain sigma is 0, use overall sigma
+        self.overall_sigma = np.std([r for (_, _, r)
+                                     in self.trainset.all_ratings()])
+
+        for x, ratings in iteritems(self.xr):
+            self.means[x] = np.mean([r for (_, r) in ratings])
+            sigma = np.std([r for (_, r) in ratings])
+            sigmas[x] = self.overall_sigma if sigma == 0.0 else sigma
+
+        if self.sim_options['user_based']:
+            n_x, yr = self.trainset.n_users, self.trainset.ir
+        else:
+            n_x, yr = self.trainset.n_items, self.trainset.ur
+
+        min_support = self.sim_options.get('min_support', 1)
+
+        args = (n_x, yr, min_support)
+
+        (self.overlapping_means,
+         self.overlapping_sigmas,
+         self.sim) = mean_std_pearson(*args)
+
+        for i in range(self.n_x):
+            zero_sigmas = self.overlapping_sigmas[i, :] == 0
+            self.overlapping_sigmas[i, zero_sigmas] = sigmas[i]
+
+        return self
+
+    def estimate(self, u, i):
+
+        if not (self.trainset.knows_user(u) and self.trainset.knows_item(i)):
+            raise PredictionImpossible('User and/or item is unknown.')
+
+        x, y = self.switch(u, i)
+
+        neighbors = [(x2, self.sim[x, x2], r) for (x2, r) in self.yr[y]]
+        k_neighbors = heapq.nlargest(self.k, neighbors, key=lambda t: t[1])
+
+
+        # compute weighted average
+        sum_sim = sum_ratings = actual_k = 0
+        for (nb, sim, r) in k_neighbors:
+            if sim > 0:
+                sum_sim += sim
+                sum_ratings += sim * ((r - self.overlapping_means[nb, x])
+                                      / self.overlapping_sigmas[nb, x]
+                                      * self.overlapping_sigmas[x, nb]
+                                      + self.overlapping_means[x, nb])
+                actual_k += 1
+
+        if actual_k < self.min_k:
+            sum_ratings = 0
+
+        try:
+            est = sum_ratings / sum_sim
+        except ZeroDivisionError:
+            est = self.means[x]
 
         details = {'actual_k': actual_k}
         return est, details
