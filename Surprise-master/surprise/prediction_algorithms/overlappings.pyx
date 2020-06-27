@@ -38,12 +38,10 @@ def mean_std_pearson(n_x, yr, min_support):
     cdef double ri, rj, self_prod, n, min_sprt, num, denum
     min_sprt = min_support
 
-    freq = np.zeros((n_x, n_x), np.int)
+    freq = np.zeros((n_x, n_x), np.bouble)
     prods = np.zeros((n_x, n_x), np.double)
-    sqi = np.zeros((n_x, n_x), np.double)
-    sqj = np.zeros((n_x, n_x), np.double)
-    si = np.zeros((n_x, n_x), np.double)
-    sj = np.zeros((n_x, n_x), np.double)
+    sq = np.zeros((n_x, n_x), np.double)
+    s = np.zeros((n_x, n_x), np.double)
     sim = np.zeros((n_x, n_x), np.double)
     std = np.zeros((n_x, n_x), np.double)
 

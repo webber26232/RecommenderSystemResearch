@@ -11,7 +11,7 @@ import heapq
 from .predictions import PredictionImpossible
 from .algo_base import AlgoBase
 
-from overlapping import mean_std_pearson
+from .overlappings import mean_std_pearson
 
 # Important note: as soon as an algorithm uses a similarity measure, it should
 # also allow the bsl_options parameter because of the pearson_baseline
