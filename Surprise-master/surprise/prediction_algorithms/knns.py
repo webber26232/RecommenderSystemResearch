@@ -414,3 +414,57 @@ class KNNWithZScore(SymmetricAlgo):
 
         details = {'actual_k': actual_k}
         return est, details
+
+
+class KNNWithInterDesen(KNNWithZScore):
+    def estimate(self, u, i):
+
+        if not (self.trainset.knows_user(u) and self.trainset.knows_item(i)):
+            raise PredictionImpossible('User and/or item is unknown.')
+
+        x, y = self.switch(u, i)
+
+        target_user_rated_item_set = {y2: r for (y2, r) in self.xr[x]}
+
+        neighbors = [(x2, self.sim[x, x2], r) for (x2, r) in self.yr[y]]
+        k_neighbors = heapq.nlargest(self.k, neighbors, key=lambda t: t[1])
+
+        est = self.means[x]
+
+        # compute weighted average
+        sum_sim = sum_ratings = actual_k = 0
+        for (nb, sim, r) in k_neighbors:
+            if sim > 0:
+                nb_user_rated_item_set = {y2: r for (y2, r) in self.xr[nb]}
+
+                inter = target_user_rated_item_set.keys() & nb_user_rated_item_set.keys()
+
+                x_overlapping_r = np.array([target_user_rated_item_set[_] for _ in inter])
+                neighbor_overlapping_r = np.array([nb_user_rated_item_set[_] for _ in inter])
+
+                x_nb_mean = x_overlapping_r.mean()
+                x_nb_std = ((x_overlapping_r - x_nb_mean) ** 2).mean() ** 0.5
+                if x_nb_std == 0:
+                    x_nb_std = self.sigmas[x]
+
+                nb_x_mean = neighbor_overlapping_r.mean()
+                nb_x_std = ((neighbor_overlapping_r - nb_x_mean) ** 2).mean() ** 0.5
+                if nb_x_std == 0:
+                    nb_x_std = self.sigmas[nb]
+
+                sum_sim += sim
+                sum_ratings += sim * ((r - nb_x_mean) / nb_x_std * x_nb_std + x_nb_mean)
+
+                actual_k += 1
+
+        if actual_k < self.min_k:
+            sum_ratings = 0
+
+        try:
+            est = sum_ratings / sum_sim
+        except ZeroDivisionError:
+            est = self.means[x]
+            # return mean
+
+        details = {'actual_k': actual_k}
+        return est, details
