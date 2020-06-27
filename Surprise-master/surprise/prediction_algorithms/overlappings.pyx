@@ -38,7 +38,7 @@ def mean_std_pearson(n_x, yr, min_support):
     cdef double ri, rj, self_prod, n, min_sprt, num, denum
     min_sprt = min_support
 
-    freq = np.zeros((n_x, n_x), np.bouble)
+    freq = np.zeros((n_x, n_x), np.double)
     prods = np.zeros((n_x, n_x), np.double)
     sq = np.zeros((n_x, n_x), np.double)
     s = np.zeros((n_x, n_x), np.double)
@@ -56,9 +56,9 @@ def mean_std_pearson(n_x, yr, min_support):
                 prods[xi, xj] += ri * rj
                 prods[xj, xi] = prods[xi, xj]
                 freq[xi, xj] += 1
-                freq[xj, xi] = freq[xj, xi]
-                sq[xi, xj] += ri**2
-                sq[xj, xi] += rj**2
+                freq[xj, xi] = freq[xi, xj]
+                sq[xi, xj] += ri ** 2
+                sq[xj, xi] += rj ** 2
                 s[xi, xj] += ri
                 s[xj, xi] += rj
 
@@ -71,8 +71,8 @@ def mean_std_pearson(n_x, yr, min_support):
             else:
                 n = freq[xi, xj]
                 num = n * prods[xi, xj] - s[xi, xj] * s[xj, xi]
-                std[xi, xj] = np.sqrt(n * sq[xi, xj] - s[xi, xj]**2)
-                std[xj, xi] = np.sqrt(n * sq[xj, xi] - s[xj, xi]**2)
+                std[xi, xj] = np.sqrt(n * sq[xi, xj] - s[xi, xj] ** 2)
+                std[xj, xi] = np.sqrt(n * sq[xj, xi] - s[xj, xi] ** 2)
                 denum = std[xi, xj] * std[xj, xi]
                 if denum == 0:
                     sim[xi, xj] = 0
