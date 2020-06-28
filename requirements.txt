@@ -5,3 +5,4 @@ scipy
 click
 scikit-surprise
 tabulate
+pyinstrument
