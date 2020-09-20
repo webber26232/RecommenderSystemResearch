@@ -463,7 +463,7 @@ class KNNWithIntersectionZScoreS1(KNNWithZScore):
                 actual_k += 1
 
         if actual_k < self.min_k:
-            sum_ratings = 0
+            sum_sim = 0
 
         try:
             est = sum_ratings / sum_sim
@@ -533,7 +533,7 @@ class KNNWithIntersectionZScoreS2(KNNWithZScore):
                 actual_k += 1
 
         if actual_k < self.min_k:
-            sum_ratings = 0
+            sum_sim = 0
 
         try:
             est = sum_ratings / sum_sim
