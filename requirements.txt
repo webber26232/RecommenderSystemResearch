@@ -3,6 +3,6 @@ pandas
 scikit-learn
 scipy
 click
-scikit-surprise
+# scikit-surprise
 tabulate
 pyinstrument

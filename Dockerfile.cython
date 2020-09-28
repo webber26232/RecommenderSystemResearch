@@ -17,7 +17,7 @@ RUN pip3 install jupyter -U && pip3 install jupyterlab
 # RUN chmod +x /usr/bin/tini
 # ENTRYPOINT ["/usr/bin/tini", "--"]
 
-# RUN cd Surprise-master && python3 setup.py install
+RUN cd Surprise-master && python3 setup.py install
 
 ENV JUPYTER_ENABLE_LAB=yes
 CMD ["jupyter", "lab", "--port=8888", "--no-browser", "--ip=0.0.0.0", "--allow-root"]
