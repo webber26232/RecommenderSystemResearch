@@ -22,7 +22,7 @@ def mean_std_pearson(n_x, yr, min_support):
     """
 
     # number of common ys
-    cdef np.ndarray[np.double_t, ndim=2] freq
+    cdef np.ndarray[np.int_t, ndim=2] freq
     # sum (r_xy * r_x'y) for common ys
     cdef np.ndarray[np.double_t, ndim=2] prods
     # sum (rxy ^ 2) for common ys
@@ -34,11 +34,11 @@ def mean_std_pearson(n_x, yr, min_support):
     # the std matrix
     cdef np.ndarray[np.double_t, ndim=2] std
 
-    cdef int i, xi, xj
-    cdef double ri, rj, self_prod, n, min_sprt, num, denum
+    cdef int i, xi, xj, n, min_sprt
+    cdef double ri, rj, self_prod, num, denum
     min_sprt = min_support
 
-    freq = np.zeros((n_x, n_x), np.double)
+    freq = np.zeros((n_x, n_x), np.int)
     prods = np.zeros((n_x, n_x), np.double)
     sq = np.zeros((n_x, n_x), np.double)
     s = np.zeros((n_x, n_x), np.double)
@@ -65,11 +65,10 @@ def mean_std_pearson(n_x, yr, min_support):
     for xi in range(n_x):
         sim[xi, xi] = 1
         for xj in range(xi + 1, n_x):
-
-            if freq[xi, xj] < min_sprt:
+            n = freq[xi, xj]
+            if n < min_sprt:
                 sim[xi, xj] = 0
             else:
-                n = freq[xi, xj]
                 num = n * prods[xi, xj] - s[xi, xj] * s[xj, xi]
                 std[xi, xj] = np.sqrt(n * sq[xi, xj] - s[xi, xj] ** 2)
                 std[xj, xi] = np.sqrt(n * sq[xj, xi] - s[xj, xi] ** 2)
