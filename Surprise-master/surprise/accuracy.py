@@ -18,7 +18,7 @@ from __future__ import (absolute_import, division, print_function,
 from collections import defaultdict
 import numpy as np
 from six import iteritems
-
+from sklearn.metrics import ndcg_score
 
 def rmse(predictions, verbose=True):
     """Compute RMSE (Root Mean Squared Error).
@@ -176,3 +176,123 @@ def fcp(predictions, verbose=True):
         print('FCP:  {0:1.4f}'.format(fcp))
 
     return fcp
+
+def weighted_fcp(predictions, verbose=True):
+    """Compute FCP (Fraction of Concordant Pairs).
+
+    Computed as described in paper `Collaborative Filtering on Ordinal User
+    Feedback <http://www.ijcai.org/Proceedings/13/Papers/449.pdf>`_ by Koren
+    and Sill, section 5.2.
+
+    Args:
+        predictions (:obj:`list` of :obj:`Prediction\
+            <surprise.prediction_algorithms.predictions.Prediction>`):
+            A list of predictions, as returned by the :meth:`test()
+            <surprise.prediction_algorithms.algo_base.AlgoBase.test>` method.
+        verbose: If True, will print computed value. Default is ``True``.
+
+
+    Returns:
+        The Fraction of Concordant Pairs.
+
+    Raises:
+        ValueError: When ``predictions`` is empty.
+    """
+
+    if not predictions:
+        raise ValueError('Prediction list is empty.')
+
+    predictions_u = defaultdict(list)
+
+    for u0, _, r0, est, _ in predictions:
+        predictions_u[u0].append((r0, est))
+
+    nc = 0
+    nd = 0
+    for u0, preds in iteritems(predictions_u):
+        nc_u = 0
+        nd_u = 0
+        for r0i, esti in preds:
+            for r0j, estj in preds:
+                if esti > estj and r0i > r0j:
+                    nc_u += 1
+                if esti >= estj and r0i < r0j:
+                    nd_u += 1
+        nc += nc_u * len(preds)
+        nd += nd_u * len(preds)
+
+    try:
+        fcp = nc / (nc + nd)
+    except ZeroDivisionError:
+        raise ValueError('cannot compute fcp on this list of prediction. ' +
+                         'Does every user have at least two predictions?')
+
+    if verbose:
+        print('FCP:  {0:1.4f}'.format(fcp))
+
+    return fcp
+
+def global_ndcg(predictions, verbose=True):
+    if not predictions:
+        raise ValueError('Prediction list is empty.')
+
+    y_true = []
+    y_est = []
+    for _, _, r0, est, _ in predictions:
+        y_true.append(r0)
+        y_est.append(est)
+    if len(y_est) > 1:
+        ndcg = ndcg_score((y_true,), (y_est,))
+    else:
+        ndcg = 1
+
+    if verbose:
+        print('global NDCG: {0:1.4f}'.format(ndcg))
+
+    return ndcg
+
+def ndcg(predictions, verbose=True):
+    if not predictions:
+        raise ValueError('Prediction list is empty.')
+
+    predictions_u = defaultdict(list)
+    for u0, _, r0, est, _ in predictions:
+        predictions_u[u0].append((r0, est))
+
+    ndcg = 0.
+    for _, preds in iteritems(predictions_u):
+        if len(preds) > 1:
+            r, est = zip(*preds)
+            ndcg += ndcg_score((r,), (est,))
+        else:
+            ndcg += 1
+
+    ndcg /= len(predictions_u)
+
+    if verbose:
+        print('NDCG:  {0:1.4f}'.format(verbose))
+    return ndcg
+
+def weighted_ndcg(predictions, verbose=True):
+    if not predictions:
+        raise ValueError('Prediction list is empty.')
+
+    predictions_u = defaultdict(list)
+    for u0, _, r0, est, _ in predictions:
+        predictions_u[u0].append((r0, est))
+
+    ndcg = 0.
+    w = 0.
+    for _, preds in iteritems(predictions_u):
+        if len(preds) > 1:
+            r, est = zip(*preds)
+            ndcg += ndcg_score((r,), (est,)) * len(r)
+        else:
+            ndcg += 1
+        w += len(preds)
+
+    ndcg /= w
+
+    if verbose:
+        print('NDCG:  {0:1.4f}'.format(verbose))
+    return ndcg

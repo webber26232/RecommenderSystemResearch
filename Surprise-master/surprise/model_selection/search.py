@@ -150,7 +150,7 @@ class BaseSearchCV(with_metaclass(ABCMeta)):
             # set best_index, and best_xxxx attributes
             if m in ('mae', 'rmse', 'mse'):
                 best_index[m] = mean_test_measures.argmin()
-            elif m in ('fcp',):
+            elif m in ('fcp', 'weighted_fcp', 'ndcg', 'weighted_ndcg', 'global_ndcg'):
                 best_index[m] = mean_test_measures.argmax()
             best_params[m] = self.param_combinations[best_index[m]]
             best_score[m] = mean_test_measures[best_index[m]]
