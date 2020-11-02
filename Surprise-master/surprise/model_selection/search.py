@@ -626,7 +626,7 @@ class EstimateParamBaseSearchCV(with_metaclass(ABCMeta)):
 
             best_params[m] = self.param_combinations[best_index[m]]
             best_score[m] = mean_test_measures[best_index[m]]
-            best_estimator[m] = self.algo_class(**best_params[m])
+            best_estimator[m] = self.algo_class
 
         # Cv results: set fit and train times (mean, std)
         fit_times = np.array(fit_times).reshape(new_shape)
