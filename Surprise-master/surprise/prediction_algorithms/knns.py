@@ -545,7 +545,7 @@ class KNNWithIntersectionZScoreS2(KNNWithZScore):
 
 algo_mapper = {'basic': '_estimate_basic',
                'with_means': '_estimate_with_means',
-               'with_score': '_estimate_with_zscore',
+               'with_zscore': '_estimate_with_zscore',
                'with_intersection_zscore': '_estimate_with_intsection_zscore'}
 
 class KNNPearson(AlgoBase):
@@ -572,7 +572,7 @@ class KNNPearson(AlgoBase):
         (self.means,
          self.sigmas,
          self.sim,
-         self.freq) = mean_std_pearson(self.n_x, self.yr)
+         self.freq) = mean_std_freq_pearson(self.n_x, self.yr)
 
         for i in range(self.n_x):
             if self.sigmas[i, i] == 0:
@@ -706,5 +706,5 @@ class KNNPearson(AlgoBase):
         return est, details
 
     def estimate(self, u, i, k=20, min_k=1, min_support=1, algo='basic'):
-        algo = algo_mapper['algo']
+        algo = algo_mapper[algo]
         return getattr(self, algo)(u, i, k, min_k, min_support)
