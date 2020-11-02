@@ -139,7 +139,7 @@ def mean_std_freq_pearson(n_x, yr):
             if n > 0:
                 sq[xi, xj] = np.sqrt(n * sq[xi, xj] - s[xi, xj] ** 2)
                 sq[xj, xi] = np.sqrt(n * sq[xj, xi] - s[xj, xi] ** 2)
-                denum = std[xi, xj] * std[xj, xi]
+                denum = sq[xi, xj] * sq[xj, xi]
                 if denum == 0:
                     prods[xi, xj] = prods[xj, xi] = 0
                 else:
