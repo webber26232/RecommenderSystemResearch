@@ -147,7 +147,7 @@ class BaseSearchCV(with_metaclass(ABCMeta)):
 
             # set best_index, and best_xxxx attributes
             if m in ('mae', 'rmse', 'mse'):
-                best_index[m] = mean_test_measures.argmin()    
+                best_index[m] = mean_test_measures.argmin()
             elif m in ('fcp', 'weighted_fcp', 'ndcg', 'weighted_ndcg', 'global_ndcg'):
                 best_index[m] = mean_test_measures.argmax()
                 indices = indices[::-1]
@@ -615,7 +615,7 @@ class EstimateParamBaseSearchCV(with_metaclass(ABCMeta)):
 
             # set best_index, and best_xxxx attributes
             if m in ('mae', 'rmse', 'mse'):
-                best_index[m] = mean_test_measures.argmin()    
+                best_index[m] = mean_test_measures.argmin()
             elif m in ('fcp', 'weighted_fcp', 'ndcg', 'weighted_ndcg', 'global_ndcg'):
                 best_index[m] = mean_test_measures.argmax()
                 indices = indices[::-1]

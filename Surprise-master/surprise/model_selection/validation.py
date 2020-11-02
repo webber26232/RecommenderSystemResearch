@@ -266,7 +266,7 @@ def fit_and_score_estimate(algo, param_set, trainset, testset, measures,
 
         if return_train_measures:
             train_predictions = algo.test(trainset.build_testset(), **param)
-    
+
         test_measures = dict()
         train_measures = dict()
         for m in measures:

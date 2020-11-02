@@ -708,5 +708,3 @@ class KNNPearson(AlgoBase):
     def estimate(self, u, i, k=20, min_k=1, min_support=1, algo='basic'):
         algo = algo_mapper['algo']
         return getattr(self, algo)(u, i, k, min_k, min_support)
-
-    
