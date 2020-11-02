@@ -55,7 +55,7 @@ class AlgoBase(object):
 
         return self
 
-    def predict(self, uid, iid, r_ui=None, clip=True, verbose=False):
+    def predict(self, uid, iid, r_ui=None, clip=True, verbose=False, **kwargs):
         """Compute the rating prediction for given user and item.
 
         The ``predict`` method converts raw ids to inner ids and then calls the
@@ -103,7 +103,7 @@ class AlgoBase(object):
 
         details = {}
         try:
-            est = self.estimate(iuid, iiid)
+            est = self.estimate(iuid, iiid, **kwargs)
 
             # If the details dict was also returned
             if isinstance(est, tuple):
@@ -142,7 +142,7 @@ class AlgoBase(object):
 
         return self.trainset.global_mean
 
-    def test(self, testset, verbose=False):
+    def test(self, testset, verbose=False, **kwargs):
         """Test the algorithm on given testset, i.e. estimate all the ratings
         in the given testset.
 
@@ -164,7 +164,7 @@ class AlgoBase(object):
         predictions = [self.predict(uid,
                                     iid,
                                     r_ui_trans,
-                                    verbose=verbose)
+                                    verbose=verbose, **kwargs)
                        for (uid, iid, r_ui_trans) in testset]
         return predictions
 

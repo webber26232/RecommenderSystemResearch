@@ -221,3 +221,59 @@ def print_summary(algo, measures, test_measures, train_measures, fit_times,
                            ['{:.2f}'.format(np.mean(test_times))] +
                            ['{:.2f}'.format(np.std(test_times))])
     print(s)
+
+def fit_and_score_estimate(algo, param_set, trainset, testset, measures,
+                           return_train_measures=False):
+    '''Helper method that trains an algorithm and compute accuracy measures on
+    a testset. Also report train and test times.
+
+    Args:
+        algo(:obj:`AlgoBase \
+            <surprise.prediction_algorithms.algo_base.AlgoBase>`):
+            The algorithm to use.
+        trainset(:obj:`Trainset <surprise.trainset.Trainset>`): The trainset.
+        testset(:obj:`testset`): The testset.
+        measures(list of string): The performance measures to compute. Allowed
+            names are function names as defined in the :mod:`accuracy
+            <surprise.accuracy>` module.
+        return_train_measures(bool): Whether to compute performance measures on
+            the trainset. Default is ``False``.
+
+    Returns:
+        tuple: A tuple containing:
+
+            - A dictionary mapping each accuracy metric to its value on the
+            testset (keys are lower case).
+
+            - A dictionary mapping each accuracy metric to its value on the
+            trainset (keys are lower case). This dict is empty if
+            return_train_measures is False.
+
+            - The fit time in seconds.
+
+            - The testing time in seconds.
+    '''
+
+    start_fit = time.time()
+    algo.fit(trainset)
+    fit_time = time.time() - start_fit
+
+    out = []
+    for param in param_set:
+        start_test = time.time()
+        predictions = algo.test(testset, **param)
+        test_time = time.time() - start_test
+
+        if return_train_measures:
+            train_predictions = algo.test(trainset.build_testset(), **param)
+    
+        test_measures = dict()
+        train_measures = dict()
+        for m in measures:
+            f = getattr(accuracy, m.lower())
+            test_measures[m] = f(predictions, verbose=0)
+            if return_train_measures:
+                train_measures[m] = f(train_predictions, verbose=0)
+        out.append((test_measures, train_measures, fit_time, test_time))
+
+    return out
