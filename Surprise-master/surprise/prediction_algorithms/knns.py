@@ -12,6 +12,7 @@ from .predictions import PredictionImpossible
 from .algo_base import AlgoBase
 
 from .overlappings import mean_std_pearson, mean_std_freq_pearson
+from .overlappings import intc_Zscore, Zscore, with_means, basic
 
 # Important note: as soon as an algorithm uses a similarity measure, it should
 # also allow the bsl_options parameter because of the pearson_baseline
@@ -561,18 +562,30 @@ class KNNPearson(AlgoBase):
     def fit(self, trainset):
         self.trainset = trainset
 
-        self.n_x = self.trainset.n_users if self.ub else self.trainset.n_items
-        self.n_y = self.trainset.n_items if self.ub else self.trainset.n_users
-        self.xr = self.trainset.ur if self.ub else self.trainset.ir
-        self.yr = self.trainset.ir if self.ub else self.trainset.ur
+        if self.ub:
+            sparse = self.trainset._data.tocsc()
+            self.n_x = self.trainset.n_users
+            self.n_y = self.trainset.n_items
+        else:
+            sparse = self.trainset._data.tocsr()
+            self.n_x = self.trainset.n_items
+            self.n_y = self.trainset.n_users
 
-        self.overall_sigma = np.std([r for (_, _, r)
-                                     in self.trainset.all_ratings()])
+        if sparse.indptr.dtype != np.int32:
+            sparse.indptr = sparse.indptr.astype(np.int32)
+        if sparse.indices.dtype != np.int32:
+            sparse.indices = sparse.indices.astype(np.int32)
+        if sparse.data.dtype != np.float32:
+            sparse.data = sparse.data.astype(np.float32)
+
+        self._data = sparse
+        self.overall_sigma = sparse.data.std()
 
         (self.means,
          self.sigmas,
-         self.sim,
-         self.freq) = mean_std_freq_pearson(self.n_x, self.yr)
+         self.sims,
+         self.freqs) = mean_std_freq_pearson(
+            self.n_x, sparse.indptr, sparse.indices, sparse.data)
 
         for i in range(self.n_x):
             if self.sigmas[i, i] == 0:
@@ -587,29 +600,10 @@ class KNNPearson(AlgoBase):
 
         x, y = self.switch(u, i)
 
-        neighbors = [(x2, self.sim[x, x2], r) for (x2, r) in self.yr[y]
-                     if self.freq[x, x2] >= min_support]
-        k_neighbors = heapq.nlargest(k, neighbors, key=lambda t: t[1])
-
-
-        # compute weighted average
-        sum_sim = sum_ratings = actual_k = 0
-        for (nb, sim, r) in k_neighbors:
-            if sim > 0:
-                sum_sim += sim
-                sum_ratings += sim * ((r - self.means[nb, x])
-                                      / self.sigmas[nb, x]
-                                      * self.sigmas[x, nb]
-                                      + self.means[x, nb])
-                actual_k += 1
-
-        if actual_k < min_k:
-            sum_sim = 0
-
-        try:
-            est = sum_ratings / sum_sim
-        except ZeroDivisionError:
-            est = self.means[x, x]
+        est, actual_k = intc_Zscore(
+            x, y, self._data.indptr, self._data.indices, self._data.data,
+            self.freqs, self.sims, self.means, self.sigmas,
+            k, min_k, min_support)
 
         details = {'actual_k': actual_k}
         return est, details
@@ -621,27 +615,10 @@ class KNNPearson(AlgoBase):
 
         x, y = self.switch(u, i)
 
-        neighbors = [(x2, self.sim[x, x2], r) for (x2, r) in self.yr[y]
-                     if self.freq[x, x2] >= min_support]
-        k_neighbors = heapq.nlargest(k, neighbors, key=lambda t: t[1])
-
-
-        est = self.means[x, x]
-        # compute weighted average
-        sum_sim = sum_ratings = actual_k = 0
-        for (nb, sim, r) in k_neighbors:
-            if sim > 0:
-                sum_sim += sim
-                sum_ratings += sim * (r - self.means[nb, nb]) / self.sigmas[nb, nb]
-                actual_k += 1
-
-        if actual_k < min_k:
-            sum_ratings = 0
-
-        try:
-            est += sum_ratings / sum_sim * self.sigmas[x, x]
-        except ZeroDivisionError:
-            pass  # return mean
+        est, actual_k = Zscore(
+            x, y, self._data.indptr, self._data.indices, self._data.data,
+            self.freqs, self.sims, self.means, self.sigmas,
+            k, min_k, min_support)
 
         details = {'actual_k': actual_k}
         return est, details
@@ -653,27 +630,10 @@ class KNNPearson(AlgoBase):
 
         x, y = self.switch(u, i)
 
-        neighbors = [(x2, self.sim[x, x2], r) for (x2, r) in self.yr[y]
-                     if self.freq[x, x2] >= min_support]
-        k_neighbors = heapq.nlargest(k, neighbors, key=lambda t: t[1])
-
-        est = self.means[x, x]
-
-        # compute weighted average
-        sum_sim = sum_ratings = actual_k = 0
-        for (nb, sim, r) in k_neighbors:
-            if sim > 0:
-                sum_sim += sim
-                sum_ratings += sim * (r - self.means[nb, nb])
-                actual_k += 1
-
-        if actual_k < min_k:
-            sum_ratings = 0
-
-        try:
-            est += sum_ratings / sum_sim
-        except ZeroDivisionError:
-            pass  # return mean
+        est, actual_k = with_means(
+            x, y, self._data.indptr, self._data.indices, self._data.data,
+            self.freqs, self.sims, self.means,
+            k, min_k, min_support)
 
         details = {'actual_k': actual_k}
         return est, details
@@ -685,22 +645,10 @@ class KNNPearson(AlgoBase):
 
         x, y = self.switch(u, i)
 
-        neighbors = [(self.sim[x, x2], r) for (x2, r) in self.yr[y]
-                     if self.freq[x, x2] >= min_support]
-        k_neighbors = heapq.nlargest(k, neighbors, key=lambda t: t[0])
-
-        # compute weighted average
-        sum_sim = sum_ratings = actual_k = 0
-        for (sim, r) in k_neighbors:
-            if sim > 0:
-                sum_sim += sim
-                sum_ratings += sim * r
-                actual_k += 1
-
-        if actual_k < self.min_k:
-            raise PredictionImpossible('Not enough neighbors.')
-
-        est = sum_ratings / sum_sim
+        est, actual_k = basic(
+            x, y, self._data.indptr, self._data.indices, self._data.data,
+            self.freqs, self.sims, self.means,
+            k, min_k, min_support)
 
         details = {'actual_k': actual_k}
         return est, details
