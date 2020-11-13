@@ -87,6 +87,7 @@ def mean_std_pearson(n_x, yr, min_support):
     mean = s / freq
     return mean, std, sim
 
+
 @cython.boundscheck(False) # turn off bounds-checking for entire function
 @cython.wraparound(False)  # turn off negative index wrapping for entire function
 def mean_std_freq_pearson(np.int32_t n_x,
@@ -201,14 +202,16 @@ def _get_k_neighbors(np.int32_t x, np.int32_t y,
         k -= 1
         ll = 0
         p = actual_k - 1
-        ptr = top_k_pointers[k]
-        top_k_pointers[k] = top_k_pointers[p]
-        top_k_pointers[p] = ptr
         while True:
+            ptr = top_k_pointers[k]
+            top_k_pointers[k] = top_k_pointers[p]
+            top_k_pointers[p] = ptr
+
             rr = p - 1
             l = ll
             r = rr
             sim_p = sims[x, indices[top_k_pointers[p]]]
+
             while l < r:
                 ptr = top_k_pointers[l]
                 if sims[x, indices[ptr]] > sim_p:
@@ -221,6 +224,7 @@ def _get_k_neighbors(np.int32_t x, np.int32_t y,
             if sims[x, indices[ptr]] <= sim_p:
                 top_k_pointers[l] = top_k_pointers[p]
                 top_k_pointers[p] = ptr
+
             if l > k:
                 p = l
             elif l < k:
@@ -271,6 +275,7 @@ def intc_Zscore(np.int32_t x, np.int32_t y,
 
     return sum_ratings / sum_sim, actual_k
 
+
 @cython.boundscheck(False) # turn off bounds-checking for entire function
 @cython.wraparound(False)  # turn off negative index wrapping for entire function
 def Zscore(np.int32_t x, np.int32_t y,
@@ -315,6 +320,7 @@ def Zscore(np.int32_t x, np.int32_t y,
     est += sum_ratings * sigmas[x, x] / sum_sim
     return est, actual_k
 
+
 @cython.boundscheck(False) # turn off bounds-checking for entire function
 @cython.wraparound(False)  # turn off negative index wrapping for entire function
 def with_means(np.int32_t x, np.int32_t y,
@@ -355,6 +361,7 @@ def with_means(np.int32_t x, np.int32_t y,
 
     est += sum_ratings / sum_sim
     return est, actual_k
+
 
 @cython.boundscheck(False) # turn off bounds-checking for entire function
 @cython.wraparound(False)  # turn off negative index wrapping for entire function

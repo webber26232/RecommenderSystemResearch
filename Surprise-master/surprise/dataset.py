@@ -279,4 +279,3 @@ class SparseDataset(DatasetAutoFolds):
     def construct_sparse_trainset(self, raw_ratings):
         raw_uid, raw_iid, r, timestamp = zip(*raw_ratings)
         return SparseTrainset(raw_uid, raw_iid, r)
-
