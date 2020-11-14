@@ -16,6 +16,7 @@ import numpy as np
 from six.moves import range
 from six import iteritems
 
+cdef bint boolean_variable = True
 
 def mean_std_pearson(n_x, yr, min_support):
     """Compute the pairwise overlapping mean & std & sim 
@@ -399,3 +400,38 @@ def basic(np.int32_t x, np.int32_t y,
         sum_sim += simi
 
     return sum_ratings / sum_sim, actual_k
+
+
+@cython.boundscheck(False) # turn off bounds-checking for entire function
+@cython.wraparound(False)  # turn off negative index wrapping for entire function
+def _fcp(np.ndarray[np.float32_t, ndim=1] rating,
+         np.ndarray[np.float32_t, ndim=1] est,
+         np.ndarray[np.int64_t, ndim=1] count,
+         bint weight):
+    cdef int nc, nd, i, j, k, ncu, ndu
+    cdef np.int64_t l, r, u_count
+
+    nc = 0
+    nd = 0
+    for i in range(count.size - 1):
+        ncu = 0
+        ndu = 0
+        l = count[i]
+        r = count[i + 1]
+
+        if weight:
+            u_count = r - l
+        else:
+            u_count = 1
+
+        for j in range(l, r):
+            for k in range(j + 1, r):
+                if ((est[j] > est[k] and rating[j] > rating[k])
+                    or (est[j] < est[k] and rating[j] < rating[k])):
+                    ncu += 1
+                if ((est[j] >= est[k] and rating[j] < rating[k])
+                    or (est[j] <= est[k] and rating[j] > rating[k])):
+                    ndu += 1
+        nc += ncu * u_count
+        nd += ndu * u_count
+    return nc / (nc + nd)

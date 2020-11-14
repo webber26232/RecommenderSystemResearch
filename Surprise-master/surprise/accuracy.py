@@ -19,6 +19,7 @@ from collections import defaultdict
 import numpy as np
 from six import iteritems
 from sklearn.metrics import ndcg_score
+from .prediction_algorithms.overlappings import _fcp
 
 def rmse(predictions, verbose=True):
     """Compute RMSE (Root Mean Squared Error).
@@ -177,7 +178,7 @@ def fcp(predictions, verbose=True):
 
     return fcp
 
-def weighted_fcp(predictions, verbose=True):
+def weighted_fcp(predictions, verbose=True, count_weight=False):
     """Compute FCP (Fraction of Concordant Pairs).
 
     Computed as described in paper `Collaborative Filtering on Ordinal User
@@ -202,27 +203,27 @@ def weighted_fcp(predictions, verbose=True):
     if not predictions:
         raise ValueError('Prediction list is empty.')
 
-    predictions_u = defaultdict(list)
+    u = []
+    r = []
+    est = []
+    for u0, _, r0, est0, _ in predictions:
+        u.append(u0)
+        r.append(r0)
+        est.append(est0)
 
-    for u0, _, r0, est, _ in predictions:
-        predictions_u[u0].append((r0, est))
+    r = np.asarray(r, dtype=np.float32)
+    est = np.asarray(est, dtype=np.float32)
 
-    nc = 0
-    nd = 0
-    for u0, preds in iteritems(predictions_u):
-        nc_u = 0
-        nd_u = 0
-        for r0i, esti in preds:
-            for r0j, estj in preds:
-                if esti > estj and r0i > r0j:
-                    nc_u += 1
-                if esti >= estj and r0i < r0j:
-                    nd_u += 1
-        nc += nc_u * len(preds)
-        nd += nd_u * len(preds)
+    _, inv_u, count = np.unique(u, return_inverse=True, return_counts=True)
+    arg = inv_u.argsort()
+    r = r[arg]
+    est = est[arg]
+
+    np.cumsum(count, out=count)
+    count = np.r_[0, count]
 
     try:
-        fcp = nc / (nc + nd)
+        fcp = _fcp(r, est, count, count_weight)
     except ZeroDivisionError:
         raise ValueError('cannot compute fcp on this list of prediction. ' +
                          'Does every user have at least two predictions?')

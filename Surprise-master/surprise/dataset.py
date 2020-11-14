@@ -275,7 +275,9 @@ class DatasetAutoFolds(Dataset):
 class SparseDataset(DatasetAutoFolds):
     def __init__(self, dataset):
         self.raw_ratings = dataset.raw_ratings
+        self.reader = dataset.reader
+        self.has_been_split = False
 
-    def construct_sparse_trainset(self, raw_ratings):
+    def construct_trainset(self, raw_ratings):
         raw_uid, raw_iid, r, timestamp = zip(*raw_ratings)
         return SparseTrainset(raw_uid, raw_iid, r)
