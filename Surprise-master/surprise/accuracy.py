@@ -211,13 +211,16 @@ def weighted_fcp(predictions, verbose=True, count_weight=False):
         r.append(r0)
         est.append(est0)
 
+    u = np.asarray(u)
     r = np.asarray(r, dtype=np.float32)
     est = np.asarray(est, dtype=np.float32)
 
-    _, inv_u, count = np.unique(u, return_inverse=True, return_counts=True)
-    arg = inv_u.argsort()
+    arg = u.argsort()
+    u = u[arg]
     r = r[arg]
     est = est[arg]
+
+    _, count = np.unique(u, return_counts=True)
 
     np.cumsum(count, out=count)
     count = np.r_[0, count]
