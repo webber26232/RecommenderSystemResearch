@@ -181,7 +181,7 @@ def _get_k_neighbors(np.int32_t x, np.int32_t y,
                      np.ndarray[np.float32_t, ndim=2] sims,
                      int k, np.int32_t min_support):
 
-    cdef int actual_k, ll, l, rr, r, p
+    cdef int actual_k, ll, l, rr, r
     cdef np.float32_t sim_p
     cdef np.int32_t start, end, x2, ptr
     cdef np.ndarray[np.int32_t, ndim=1] top_k_pointers
@@ -202,32 +202,25 @@ def _get_k_neighbors(np.int32_t x, np.int32_t y,
         # perform partition to select top k
         k -= 1
         ll = 0
-        p = actual_k - 1
+        rr = actual_k - 1
         while True:
-            ptr = top_k_pointers[k]
-            top_k_pointers[k] = top_k_pointers[p]
-            top_k_pointers[p] = ptr
-
-            rr = p - 1
             l = ll
             r = rr
-            sim_p = sims[x, indices[top_k_pointers[p]]]
+            sim_p = sims[x, indices[top_k_pointers[k]]]
 
             while l < r:
-                ptr = top_k_pointers[l]
-                if sims[x, indices[ptr]] > sim_p:
+                if sims[x, indices[top_k_pointers[l]]] > sim_p:
                     l += 1
                 else:
-                    top_k_pointers[l] = top_k_pointers[r]
-                    top_k_pointers[r] = ptr
+                    top_k_pointers[l], top_k_pointers[r] = \
+                        top_k_pointers[r], top_k_pointers[l]
                     r -= 1
-            ptr = top_k_pointers[l]
-            if sims[x, indices[ptr]] <= sim_p:
-                top_k_pointers[l] = top_k_pointers[p]
-                top_k_pointers[p] = ptr
+
+            if sims[x, indices[top_k_pointers[l]]] <= sim_p:
+                l -= 1
 
             if l > k:
-                p = l
+                rr = l
             elif l < k:
                 ll = l + 1
             else:
