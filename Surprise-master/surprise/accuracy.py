@@ -21,40 +21,6 @@ from six import iteritems
 from sklearn.metrics import ndcg_score
 from .prediction_algorithms.overlappings import _fcp
 
-def rmse(predictions, verbose=True):
-    """Compute RMSE (Root Mean Squared Error).
-
-    .. math::
-        \\text{RMSE} = \\sqrt{\\frac{1}{|\\hat{R}|} \\sum_{\\hat{r}_{ui} \in
-        \\hat{R}}(r_{ui} - \\hat{r}_{ui})^2}.
-
-    Args:
-        predictions (:obj:`list` of :obj:`Prediction\
-            <surprise.prediction_algorithms.predictions.Prediction>`):
-            A list of predictions, as returned by the :meth:`test()
-            <surprise.prediction_algorithms.algo_base.AlgoBase.test>` method.
-        verbose: If True, will print computed value. Default is ``True``.
-
-
-    Returns:
-        The Root Mean Squared Error of predictions.
-
-    Raises:
-        ValueError: When ``predictions`` is empty.
-    """
-
-    if not predictions:
-        raise ValueError('Prediction list is empty.')
-
-    mse = np.mean([float((true_r - est)**2)
-                   for (_, _, true_r, est, _) in predictions])
-    rmse_ = np.sqrt(mse)
-
-    if verbose:
-        print('RMSE: {0:1.4f}'.format(rmse_))
-
-    return rmse_
-
 
 def mse(predictions, verbose=True):
     """Compute MSE (Mean Squared Error).
@@ -81,13 +47,48 @@ def mse(predictions, verbose=True):
     if not predictions:
         raise ValueError('Prediction list is empty.')
 
-    mse_ = np.mean([float((true_r - est)**2)
-                    for (_, _, true_r, est, _) in predictions])
+    true_r = []
+    est = []
+    for (_, _, true_r0, est0, _) in predictions:
+        true_r.append(true_r0)
+        est.append(est0)
+    mse_ = np.mean((np.array(true_r) - np.array(est)) ** 2)
 
     if verbose:
         print('MSE: {0:1.4f}'.format(mse_))
 
     return mse_
+
+
+def rmse(predictions, verbose=True):
+    """Compute RMSE (Root Mean Squared Error).
+
+    .. math::
+        \\text{RMSE} = \\sqrt{\\frac{1}{|\\hat{R}|} \\sum_{\\hat{r}_{ui} \in
+        \\hat{R}}(r_{ui} - \\hat{r}_{ui})^2}.
+
+    Args:
+        predictions (:obj:`list` of :obj:`Prediction\
+            <surprise.prediction_algorithms.predictions.Prediction>`):
+            A list of predictions, as returned by the :meth:`test()
+            <surprise.prediction_algorithms.algo_base.AlgoBase.test>` method.
+        verbose: If True, will print computed value. Default is ``True``.
+
+
+    Returns:
+        The Root Mean Squared Error of predictions.
+
+    Raises:
+        ValueError: When ``predictions`` is empty.
+    """
+
+    
+    rmse_ = np.sqrt(mse(predictions, verbose))
+
+    if verbose:
+        print('RMSE: {0:1.4f}'.format(rmse_))
+
+    return rmse_
 
 
 def mae(predictions, verbose=True):
@@ -115,8 +116,12 @@ def mae(predictions, verbose=True):
     if not predictions:
         raise ValueError('Prediction list is empty.')
 
-    mae_ = np.mean([float(abs(true_r - est))
-                    for (_, _, true_r, est, _) in predictions])
+    true_r = []
+    est = []
+    for (_, _, true_r0, est0, _) in predictions:
+        true_r.append(true_r0)
+        est.append(est0)
+    mae_ = np.mean(np.abs(np.array(true_r) - np.array(est)))
 
     if verbose:
         print('MAE:  {0:1.4f}'.format(mae_))
