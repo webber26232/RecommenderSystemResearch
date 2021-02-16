@@ -5,6 +5,7 @@ from __future__ import (absolute_import, division, print_function,
                         unicode_literals)
 
 import numpy as np
+from scipy.sparse import coo_matrix, csr_matrix
 from six import iteritems
 
 
@@ -256,5 +257,66 @@ class Trainset:
         if self._global_mean is None:
             self._global_mean = np.mean([r for (_, _, r) in
                                          self.all_ratings()])
+
+        return self._global_mean
+
+class SparseTrainset(Trainset):
+    def __init__(self, raw_uid, raw_iid, ratings):
+        unique_uid, inner_uid = np.unique(raw_uid, return_inverse=True)
+        unique_iid, inner_iid = np.unique(raw_iid, return_inverse=True)
+        self._raw2inner_id_users = {uid: i for i, uid in enumerate(unique_uid)}
+        self._raw2inner_id_items = {iid: i for i, iid in enumerate(unique_iid)}
+        self._data = coo_matrix((ratings, (inner_uid, inner_iid)))
+        self.rating_scale = (self._data.data.min(), self._data.data.max())
+        self._global_mean = None
+        # inner2raw dicts could be built right now (or even before) but they
+        # are not always useful so we wait until we need them.
+        self._inner2raw_id_users = None
+        self._inner2raw_id_items = None
+
+    @property
+    def n_users(self):
+        return len(self._raw2inner_id_users)
+
+    @property
+    def n_items(self):
+        return len(self._raw2inner_id_items)
+
+    @property
+    def n_ratings(self):
+        return self._data.data.size
+
+    def knows_user(self, uid):
+        return isinstance(uid, int) and (uid < self.n_users)
+
+    def knows_item(self, iid):
+        return isinstance(iid, int) and (iid < self.n_items)
+
+    def all_ratings(self):
+        if isinstance(self._data, csr_matrix):
+            data = self._data
+        else:
+            data = self._data.tocsr()
+        for u in range(self.n_users):
+            for j in range(data.indptr[u], data.indptr[u + 1]):
+                yield u, data.indices[j], data.data[j]
+
+    def build_testset(self):
+        return [(self.to_raw_uid(u), self.to_raw_iid(i), r)
+                for (u, i, r) in self.all_ratings()]
+
+    def build_anti_testset(self, fill=None):
+        fill = self.global_mean if fill is None else float(fill)
+
+        anti_testset = []
+        return anti_testset
+
+    @property
+    def global_mean(self):
+        """Return the mean of all ratings.
+
+        It's only computed once."""
+        if self._global_mean is None:
+            self._global_mean = self._data.data.mean()
 
         return self._global_mean

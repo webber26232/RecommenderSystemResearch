@@ -11,6 +11,8 @@ import heapq
 from .predictions import PredictionImpossible
 from .algo_base import AlgoBase
 
+from .overlappings import mean_std_pearson, mean_std_freq_pearson
+from .overlappings import intc_Zscore, Zscore, with_means, basic
 
 # Important note: as soon as an algorithm uses a similarity measure, it should
 # also allow the bsl_options parameter because of the pearson_baseline
@@ -414,3 +416,243 @@ class KNNWithZScore(SymmetricAlgo):
 
         details = {'actual_k': actual_k}
         return est, details
+
+
+class KNNWithIntersectionZScoreS1(KNNWithZScore):
+    def estimate(self, u, i):
+
+        if not (self.trainset.knows_user(u) and self.trainset.knows_item(i)):
+            raise PredictionImpossible('User and/or item is unkown.')
+
+        x, y = self.switch(u, i)
+
+        x_r = np.full(self.n_y, np.nan, dtype=np.float64)
+        neighbor_r = x_r.copy()
+        x_y, r = zip(*self.xr[x])
+        x_r[list(x_y)] = r
+        x_nan_mask = np.isnan(x_r)
+
+        neighbors = [(x2, self.sim[x, x2], r) for (x2, r) in self.yr[y]]
+        k_neighbors = heapq.nlargest(self.k, neighbors, key=lambda t: t[1])
+
+
+        # compute weighted average
+        sum_sim = sum_ratings = actual_k = 0
+        for (nb, sim, r) in k_neighbors:
+            if sim > 0:
+                nb_y, nb_r = zip(*self.xr[nb])
+                neighbor_r[list(nb_y)] = nb_r
+                overlapping_ind = np.flatnonzero(~(x_nan_mask | np.isnan(neighbor_r)))
+                x_overlapping_r = x_r[overlapping_ind]
+                neighbor_overlapping_r = neighbor_r[overlapping_ind]
+                # reset
+                neighbor_r.fill(np.nan)
+
+                x_nb_mean = x_overlapping_r.mean()
+                x_nb_std = ((x_overlapping_r - x_nb_mean) ** 2).mean() ** 0.5
+                if x_nb_std == 0:
+                    x_nb_std = self.sigmas[x]
+
+                nb_x_mean = neighbor_overlapping_r.mean()
+                nb_x_std = ((neighbor_overlapping_r - nb_x_mean) ** 2).mean() ** 0.5
+                if nb_x_std == 0:
+                    nb_x_std = self.sigmas[nb]
+
+                sum_sim += sim
+                sum_ratings += sim * ((r - nb_x_mean) / nb_x_std * x_nb_std + x_nb_mean)
+
+                actual_k += 1
+
+        if actual_k < self.min_k:
+            sum_sim = 0
+
+        try:
+            est = sum_ratings / sum_sim
+        except ZeroDivisionError:
+            est = self.means[x]
+            # return mean
+
+        details = {'actual_k': actual_k}
+        return est, details
+
+
+class KNNWithIntersectionZScoreS2(KNNWithZScore):
+    def fit(self, trainset):
+
+        SymmetricAlgo.fit(self, trainset)
+
+        self.means = np.zeros(self.n_x)
+        sigmas = np.zeros(self.n_x)
+        # when certain sigma is 0, use overall sigma
+        self.overall_sigma = np.std([r for (_, _, r)
+                                     in self.trainset.all_ratings()])
+
+        for x, ratings in iteritems(self.xr):
+            self.means[x] = np.mean([r for (_, r) in ratings])
+            sigma = np.std([r for (_, r) in ratings])
+            sigmas[x] = self.overall_sigma if sigma == 0.0 else sigma
+
+        if self.sim_options['user_based']:
+            n_x, yr = self.trainset.n_users, self.trainset.ir
+        else:
+            n_x, yr = self.trainset.n_items, self.trainset.ur
+
+        min_support = self.sim_options.get('min_support', 1)
+
+        args = (n_x, yr, min_support)
+
+        (self.overlapping_means,
+         self.overlapping_sigmas,
+         self.sim) = mean_std_pearson(*args)
+
+        for i in range(self.n_x):
+            zero_sigmas = self.overlapping_sigmas[i, :] == 0
+            self.overlapping_sigmas[i, zero_sigmas] = sigmas[i]
+
+        return self
+
+    def estimate(self, u, i):
+
+        if not (self.trainset.knows_user(u) and self.trainset.knows_item(i)):
+            raise PredictionImpossible('User and/or item is unknown.')
+
+        x, y = self.switch(u, i)
+
+        neighbors = [(x2, self.sim[x, x2], r) for (x2, r) in self.yr[y]]
+        k_neighbors = heapq.nlargest(self.k, neighbors, key=lambda t: t[1])
+
+
+        # compute weighted average
+        sum_sim = sum_ratings = actual_k = 0
+        for (nb, sim, r) in k_neighbors:
+            if sim > 0:
+                sum_sim += sim
+                sum_ratings += sim * ((r - self.overlapping_means[nb, x])
+                                      / self.overlapping_sigmas[nb, x]
+                                      * self.overlapping_sigmas[x, nb]
+                                      + self.overlapping_means[x, nb])
+                actual_k += 1
+
+        if actual_k < self.min_k:
+            sum_sim = 0
+
+        try:
+            est = sum_ratings / sum_sim
+        except ZeroDivisionError:
+            est = self.means[x]
+
+        details = {'actual_k': actual_k}
+        return est, details
+
+algo_mapper = {'basic': '_estimate_basic',
+               'with_means': '_estimate_with_means',
+               'with_zscore': '_estimate_with_zscore',
+               'with_intersection_zscore': '_estimate_with_intsection_zscore'}
+
+class KNNPearson(AlgoBase):
+    def __init__(self, user_based=True):
+        self.ub = user_based
+
+    def switch(self, u, i):
+        if self.ub:
+            return u, i
+        else:
+            return i, u
+
+    def fit(self, trainset):
+        self.trainset = trainset
+
+        if self.ub:
+            sparse = self.trainset._data.tocsc()
+            self.n_x = self.trainset.n_users
+            self.n_y = self.trainset.n_items
+        else:
+            sparse = self.trainset._data.tocsr()
+            self.n_x = self.trainset.n_items
+            self.n_y = self.trainset.n_users
+
+        if sparse.indptr.dtype != np.int32:
+            sparse.indptr = sparse.indptr.astype(np.int32)
+        if sparse.indices.dtype != np.int32:
+            sparse.indices = sparse.indices.astype(np.int32)
+        if sparse.data.dtype != np.float32:
+            sparse.data = sparse.data.astype(np.float32)
+
+        self._data = sparse
+        self.overall_sigma = sparse.data.std()
+
+        (self.means,
+         self.sigmas,
+         self.sims,
+         self.freqs) = mean_std_freq_pearson(
+            self.n_x, sparse.indptr, sparse.indices, sparse.data)
+
+        for i in range(self.n_x):
+            if self.sigmas[i, i] == 0:
+                self.sigmas[i, i] = self.overall_sigma
+
+        return self
+
+    def _estimate_with_intsection_zscore(self, u, i, k=20, min_k=1, min_support=1):
+
+        if not (self.trainset.knows_user(u) and self.trainset.knows_item(i)):
+            raise PredictionImpossible('User and/or item is unknown.')
+
+        x, y = self.switch(u, i)
+
+        est, actual_k = intc_Zscore(
+            x, y, self._data.indptr, self._data.indices, self._data.data,
+            self.freqs, self.sims, self.means, self.sigmas,
+            k, min_k, min_support)
+
+        details = {'actual_k': actual_k}
+        return est, details
+
+    def _estimate_with_zscore(self, u, i, k=20, min_k=1, min_support=1):
+
+        if not (self.trainset.knows_user(u) and self.trainset.knows_item(i)):
+            raise PredictionImpossible('User and/or item is unknown.')
+
+        x, y = self.switch(u, i)
+
+        est, actual_k = Zscore(
+            x, y, self._data.indptr, self._data.indices, self._data.data,
+            self.freqs, self.sims, self.means, self.sigmas,
+            k, min_k, min_support)
+
+        details = {'actual_k': actual_k}
+        return est, details
+
+    def _estimate_with_means(self, u, i, k=20, min_k=1, min_support=1):
+
+        if not (self.trainset.knows_user(u) and self.trainset.knows_item(i)):
+            raise PredictionImpossible('User and/or item is unknown.')
+
+        x, y = self.switch(u, i)
+
+        est, actual_k = with_means(
+            x, y, self._data.indptr, self._data.indices, self._data.data,
+            self.freqs, self.sims, self.means,
+            k, min_k, min_support)
+
+        details = {'actual_k': actual_k}
+        return est, details
+
+    def _estimate_basic(self, u, i, k=20, min_k=1, min_support=1):
+
+        if not (self.trainset.knows_user(u) and self.trainset.knows_item(i)):
+            raise PredictionImpossible('User and/or item is unknown.')
+
+        x, y = self.switch(u, i)
+
+        est, actual_k = basic(
+            x, y, self._data.indptr, self._data.indices, self._data.data,
+            self.freqs, self.sims, self.means,
+            k, min_k, min_support)
+
+        details = {'actual_k': actual_k}
+        return est, details
+
+    def estimate(self, u, i, k=20, min_k=1, min_support=1, algo='basic'):
+        algo = algo_mapper[algo]
+        return getattr(self, algo)(u, i, k, min_k, min_support)

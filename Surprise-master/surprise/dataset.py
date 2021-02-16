@@ -35,7 +35,7 @@ from six.moves import input
 from .reader import Reader
 from .builtin_datasets import download_builtin_dataset
 from .builtin_datasets import BUILTIN_DATASETS
-from .trainset import Trainset
+from .trainset import Trainset, SparseTrainset
 
 
 class Dataset:
@@ -271,3 +271,13 @@ class DatasetAutoFolds(Dataset):
         """
 
         return self.construct_trainset(self.raw_ratings)
+
+class SparseDataset(DatasetAutoFolds):
+    def __init__(self, dataset):
+        self.raw_ratings = dataset.raw_ratings
+        self.reader = dataset.reader
+        self.has_been_split = False
+
+    def construct_trainset(self, raw_ratings):
+        raw_uid, raw_iid, r, timestamp = zip(*raw_ratings)
+        return SparseTrainset(raw_uid, raw_iid, r)
